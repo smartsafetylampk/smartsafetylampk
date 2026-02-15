@@ -366,7 +366,7 @@
     <div class="container">
         <header>
             <h1>
-                <div class="logo">💡</div>
+                <div class="logo">ðŸ’¡</div>
                 Smart Safety Lamp Dashboard
             </h1>
             <div class="connection-status">
@@ -385,7 +385,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">System Status</div>
-                    <div class="card-icon icon-status">🛡️</div>
+                    <div class="card-icon icon-status">ðŸ›¡ï¸</div>
                 </div>
                 <div class="status-indicator status-safe" id="system-status">SAFE</div>
                 <div class="info-grid">
@@ -404,7 +404,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">Motion Detected</div>
-                    <div class="card-icon icon-motion">👋</div>
+                    <div class="card-icon icon-motion">ðŸ‘‹</div>
                 </div>
                 <div class="metric-value" id="motion-count">0</div>
                 <div class="metric-label">Total Detections</div>
@@ -418,12 +418,16 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">Light Sensor</div>
-                    <div class="card-icon icon-light">☀️</div>
+                    <div class="card-icon icon-light">â˜€ï¸</div>
                 </div>
                 <div class="metric-value" id="light-value">0</div>
-                <div class="metric-label">Brightness Level</div>
+                <div class="metric-label">Brightness (0-4095 ADC)</div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="light-progress" style="width: 0%"></div>
+                </div>
+                <div class="info-item" style="margin-top: 10px;">
+                    <label>Condition</label>
+                    <value id="light-condition">Unknown</value>
                 </div>
                 <div class="info-item" style="margin-top: 15px;">
                     <label>Changes Today</label>
@@ -435,7 +439,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">Alarm Events</div>
-                    <div class="card-icon icon-alarm">🚨</div>
+                    <div class="card-icon icon-alarm">ðŸš¨</div>
                 </div>
                 <div class="metric-value" id="alarm-count">0</div>
                 <div class="metric-label">Total Alarms</div>
@@ -603,7 +607,7 @@
             mqttClient.on('connect', () => {
                 console.log('Connected to MQTT broker');
                 updateMQTTStatus(true);
-                addLog('✅ Connected to MQTT broker');
+                addLog('âœ… Connected to MQTT broker');
 
                 // Subscribe to all topics
                 Object.values(TOPICS).forEach(topic => {
@@ -619,12 +623,12 @@
             mqttClient.on('error', (error) => {
                 console.error('MQTT Error:', error);
                 updateMQTTStatus(false);
-                addLog('❌ MQTT connection error');
+                addLog('âŒ MQTT connection error');
             });
 
             mqttClient.on('close', () => {
                 updateMQTTStatus(false);
-                addLog('⚠️ MQTT connection closed');
+                addLog('âš ï¸ MQTT connection closed');
             });
         }
 
@@ -686,6 +690,10 @@
             if (data.light !== undefined) {
                 updateLightValue(data.light);
             }
+            if (data.is_dark !== undefined) {
+                document.getElementById('light-condition').textContent =
+                    data.is_dark ? 'Dark' : 'Bright';
+            }
             
             // Update motion status
             if (data.motion !== undefined) {
@@ -696,14 +704,14 @@
             // Update alarm status
             if (data.alarm !== undefined) {
                 document.getElementById('alarm-status').textContent = 
-                    data.alarm ? 'ACTIVE ⚠️' : 'Inactive';
+                    data.alarm ? 'ACTIVE âš ï¸' : 'Inactive';
             }
         }
 
         // Update Motion
         function updateMotion(data) {
             if (data.detected) {
-                addLog('👋 Motion detected!');
+                addLog('ðŸ‘‹ Motion detected!');
             }
             if (data.count !== undefined) {
                 document.getElementById('motion-count').textContent = data.count;
@@ -711,21 +719,29 @@
         }
 
         // Update Light
-        function updateLight(value) {
-            updateLightValue(parseInt(value));
-            addLog(`☀️ Light level changed: ${value}`);
+        function updateLight(data) {
+            const rawValue = (data && data.light !== undefined) ? data.light : data;
+            const value = parseInt(rawValue, 10);
+            if (!Number.isNaN(value)) {
+                updateLightValue(value);
+            }
+            if (data && data.dark !== undefined) {
+                document.getElementById('light-condition').textContent =
+                    data.dark ? 'Dark' : 'Bright';
+            }
+            addLog(`â˜€ï¸ Light level changed: ${rawValue}`);
         }
 
         function updateLightValue(value) {
             document.getElementById('light-value').textContent = value;
-            const percentage = (value / 4095) * 100; // ESP32 12-bit ADC
+            const percentage = ((4095 - value) / 4095) * 100; // Higher ADC value means darker for this wiring
             document.getElementById('light-progress').style.width = percentage + '%';
         }
 
         // Update Alarm
         function updateAlarm(data) {
             if (data.active) {
-                addLog('🚨 ALARM TRIGGERED!');
+                addLog('ðŸš¨ ALARM TRIGGERED!');
             }
             if (data.count !== undefined) {
                 document.getElementById('alarm-count').textContent = data.count;
@@ -812,7 +828,7 @@
         window.addEventListener('load', () => {
             initChart();
             connectMQTT();
-            addLog('🚀 Dashboard initialized');
+            addLog('ðŸš€ Dashboard initialized');
         });
     </script>
 </body>
