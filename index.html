@@ -508,6 +508,11 @@
         let alarmData = [];
         let timeLabels = [];
         let activityChart;
+        const CHART_INTERVAL_MS = 2 * 60 * 1000;
+        let chartIntervalId = null;
+        let intervalMotionCount = 0;
+        let lastMotionTotal = null;
+        let latestAlarmValue = 0;
 
         
         // Initialize Chart (lighter + smoother + fixed point alignment)
@@ -615,6 +620,18 @@
             }
 
             if (activityChart) activityChart.update('none');
+        }
+
+        function flushChartInterval() {
+            pushChartPoint(intervalMotionCount, latestAlarmValue);
+            intervalMotionCount = 0;
+        }
+
+        function startChartInterval() {
+            if (chartIntervalId) {
+                clearInterval(chartIntervalId);
+            }
+            chartIntervalId = setInterval(flushChartInterval, CHART_INTERVAL_MS);
         }
 
         // Connect to MQTT
@@ -783,22 +800,28 @@
             // Update visible counters
             if (hasMotion) {
                 document.getElementById('motion-count').textContent = data.motion;
+                const currentMotionTotal = Number(data.motion);
+                if (Number.isFinite(currentMotionTotal)) {
+                    if (lastMotionTotal === null) {
+                        lastMotionTotal = currentMotionTotal;
+                    } else if (currentMotionTotal >= lastMotionTotal) {
+                        intervalMotionCount += (currentMotionTotal - lastMotionTotal);
+                        lastMotionTotal = currentMotionTotal;
+                    } else {
+                        // Counter reset from device; restart baseline.
+                        lastMotionTotal = currentMotionTotal;
+                    }
+                }
             }
             if (hasAlarm) {
                 document.getElementById('alarm-count').textContent = data.alarm;
+                const currentAlarmValue = Number(data.alarm);
+                if (Number.isFinite(currentAlarmValue)) {
+                    latestAlarmValue = currentAlarmValue;
+                }
             }
             if (data.light_change !== undefined) {
                 document.getElementById('light-changes').textContent = data.light_change;
-            }
-
-            // Chart: push exactly ONE point per counter message (fixes duplicated timestamps)
-            if (hasMotion || hasAlarm) {
-                const lastMotion = motionData[motionData.length - 1] ?? 0;
-                const lastAlarm = alarmData[alarmData.length - 1] ?? 0;
-                const nextMotion = hasMotion ? data.motion : lastMotion;
-                const nextAlarm = hasAlarm ? data.alarm : lastAlarm;
-
-                pushChartPoint(nextMotion, nextAlarm);
             }
         }
 
@@ -870,6 +893,7 @@
         // Initialize on load
         window.addEventListener('load', () => {
             initChart();
+            startChartInterval();
             connectMQTT();
             document.getElementById('set-hold-btn').addEventListener('click', applyHoldTime);
             addLog('Dashboard initialized');
