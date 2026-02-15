@@ -366,7 +366,7 @@
     <div class="container">
         <header>
             <h1>
-                <div class="logo">ðŸ’¡</div>
+                <div class="logo">&#128161;</div>
                 Smart Safety Lamp Dashboard
             </h1>
             <div class="connection-status">
@@ -385,7 +385,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">System Status</div>
-                    <div class="card-icon icon-status">ðŸ›¡ï¸</div>
+                    <div class="card-icon icon-status">&#128737;</div>
                 </div>
                 <div class="status-indicator status-safe" id="system-status">SAFE</div>
                 <div class="info-grid">
@@ -404,7 +404,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">Motion Detected</div>
-                    <div class="card-icon icon-motion">ðŸ‘‹</div>
+                    <div class="card-icon icon-motion">&#128075;</div>
                 </div>
                 <div class="metric-value" id="motion-count">0</div>
                 <div class="metric-label">Total Detections</div>
@@ -418,7 +418,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">Light Sensor</div>
-                    <div class="card-icon icon-light">â˜€ï¸</div>
+                    <div class="card-icon icon-light">&#9728;</div>
                 </div>
                 <div class="metric-value" id="light-value">0</div>
                 <div class="metric-label">Brightness (0-4095 ADC)</div>
@@ -439,13 +439,30 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">Alarm Events</div>
-                    <div class="card-icon icon-alarm">ðŸš¨</div>
+                    <div class="card-icon icon-alarm">&#128680;</div>
                 </div>
                 <div class="metric-value" id="alarm-count">0</div>
-                <div class="metric-label">Total Alarms</div>
+                <div class="metric-label">Motion in Dark Events</div>
                 <div class="info-item" style="margin-top: 15px;">
                     <label>Alarm Status</label>
                     <value id="alarm-status">Inactive</value>
+                </div>
+            </div>
+
+            <!-- Lamp Hold Time Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Set Time Lamp</div>
+                    <div class="card-icon icon-status">&#9201;</div>
+                </div>
+                <div class="info-item">
+                    <label>Set Time Lamp (detik)</label>
+                    <input id="hold-seconds-input" type="number" min="1" max="600" value="10" style="width:100%; margin-top:6px; padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#fff;">
+                </div>
+                <button id="set-hold-btn" style="margin-top:12px; width:100%; padding:9px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.25); background:rgba(102,126,234,.5); color:#fff; cursor:pointer;">Apply</button>
+                <div class="info-item" style="margin-top: 12px;">
+                    <label>Current Time Lamp</label>
+                    <value id="hold-seconds-current">10 s</value>
                 </div>
             </div>
 
@@ -481,7 +498,8 @@
             motion: 'smartlamp/motion',
             light: 'smartlamp/light',
             alarm: 'smartlamp/alarm',
-            counter: 'smartlamp/counter'
+            counter: 'smartlamp/counter',
+            command: 'smartlamp/command'
         };
 
         // Variables
@@ -607,7 +625,7 @@
             mqttClient.on('connect', () => {
                 console.log('Connected to MQTT broker');
                 updateMQTTStatus(true);
-                addLog('âœ… Connected to MQTT broker');
+                addLog('Connected to MQTT broker');
 
                 // Subscribe to all topics
                 Object.values(TOPICS).forEach(topic => {
@@ -623,12 +641,12 @@
             mqttClient.on('error', (error) => {
                 console.error('MQTT Error:', error);
                 updateMQTTStatus(false);
-                addLog('âŒ MQTT connection error');
+                addLog('MQTT connection error');
             });
 
             mqttClient.on('close', () => {
                 updateMQTTStatus(false);
-                addLog('âš ï¸ MQTT connection closed');
+                addLog('MQTT connection closed');
             });
         }
 
@@ -704,14 +722,18 @@
             // Update alarm status
             if (data.alarm !== undefined) {
                 document.getElementById('alarm-status').textContent = 
-                    data.alarm ? 'ACTIVE âš ï¸' : 'Inactive';
+                    data.alarm ? 'ACTIVE ALERT' : 'Inactive';
+            }
+            if (data.hold_ms !== undefined) {
+                const sec = Math.max(1, Math.round(data.hold_ms / 1000));
+                document.getElementById('hold-seconds-current').textContent = `${sec} s`;
             }
         }
 
         // Update Motion
         function updateMotion(data) {
             if (data.detected) {
-                addLog('ðŸ‘‹ Motion detected!');
+                addLog('Motion detected!');
             }
             if (data.count !== undefined) {
                 document.getElementById('motion-count').textContent = data.count;
@@ -729,7 +751,7 @@
                 document.getElementById('light-condition').textContent =
                     data.dark ? 'Dark' : 'Bright';
             }
-            addLog(`â˜€ï¸ Light level changed: ${rawValue}`);
+            addLog(`Light level changed: ${rawValue}`);
         }
 
         function updateLightValue(value) {
@@ -741,7 +763,11 @@
         // Update Alarm
         function updateAlarm(data) {
             if (data.active) {
-                addLog('ðŸš¨ ALARM TRIGGERED!');
+                addLog('ALARM TRIGGERED!');
+            }
+            if (data.active !== undefined) {
+                document.getElementById('alarm-status').textContent =
+                    data.active ? 'ACTIVE ALERT' : 'Inactive';
             }
             if (data.count !== undefined) {
                 document.getElementById('alarm-count').textContent = data.count;
@@ -824,12 +850,31 @@
             return num.toString().padStart(2, '0');
         }
 
+        function applyHoldTime() {
+            const input = document.getElementById('hold-seconds-input');
+            const sec = parseInt(input.value, 10);
+            if (Number.isNaN(sec) || sec < 1 || sec > 600) {
+                addLog('Set Time Lamp harus 1-600 detik');
+                return;
+            }
+            if (!mqttClient || !mqttClient.connected) {
+                addLog('MQTT belum terkoneksi');
+                return;
+            }
+            const payload = JSON.stringify({ hold_ms: sec * 1000 });
+            mqttClient.publish(TOPICS.command, payload);
+            document.getElementById('hold-seconds-current').textContent = `${sec} s`;
+            addLog(`Set Time Lamp: ${sec} detik`);
+        }
+
         // Initialize on load
         window.addEventListener('load', () => {
             initChart();
             connectMQTT();
-            addLog('ðŸš€ Dashboard initialized');
+            document.getElementById('set-hold-btn').addEventListener('click', applyHoldTime);
+            addLog('Dashboard initialized');
         });
     </script>
 </body>
 </html>
+
